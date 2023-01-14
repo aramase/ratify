@@ -29,7 +29,7 @@ type VerifierPluginArgs struct {
 	SubjectReference string
 }
 
-var _ pluginCommon.PluginArgs = &VerifierPluginArgs{}
+var _ pluginCommon.Args = &VerifierPluginArgs{}
 
 func (args *VerifierPluginArgs) AsEnviron() []string {
 	env := os.Environ()

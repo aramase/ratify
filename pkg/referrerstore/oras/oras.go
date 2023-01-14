@@ -129,7 +129,7 @@ func (s *orasStoreFactory) Create(version string, storeConfig config.StorePlugin
 	secureRetryClient.Backoff = retryablehttp.LinearJitterBackoff
 	secureRetryClient.RetryWaitMin = HttpRetryDurationMin
 	secureRetryClient.RetryWaitMax = HttpRetryDurationMax
-	secureRetryClient.Logger = utils.HttpRetryLogger{}
+	secureRetryClient.Logger = utils.HTTPRetryLogger{}
 	secureTransport := http.DefaultTransport.(*http.Transport).Clone()
 	secureTransport.MaxIdleConns = HttpMaxIdleConns
 	secureTransport.MaxConnsPerHost = HttpMaxConnsPerHost
@@ -142,7 +142,7 @@ func (s *orasStoreFactory) Create(version string, storeConfig config.StorePlugin
 	insecureRetryClient.Backoff = retryablehttp.LinearJitterBackoff
 	insecureRetryClient.RetryWaitMin = HttpRetryDurationMin
 	insecureRetryClient.RetryWaitMax = HttpRetryDurationMax
-	insecureRetryClient.Logger = utils.HttpRetryLogger{}
+	insecureRetryClient.Logger = utils.HTTPRetryLogger{}
 	insecureTransport := http.DefaultTransport.(*http.Transport).Clone()
 	insecureTransport.MaxIdleConns = HttpMaxIdleConns
 	insecureTransport.MaxConnsPerHost = HttpMaxConnsPerHost

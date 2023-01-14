@@ -22,19 +22,19 @@ import (
 	et "github.com/deislabs/ratify/pkg/executor/types"
 )
 
-// MemoryCache describes an in-memory cache with automatic expiration
-type MemoryCache struct {
+// Cache describes an in-memory cache with automatic expiration
+type Cache struct {
 	syncMap *SyncMapWithExpiration
 }
 
-func (memoryCache MemoryCache) GetVerifyResult(ctx context.Context, subjectRefString string) (et.VerifyResult, bool) {
-	item, ok := memoryCache.syncMap.GetEntry(subjectRefString)
+func (c Cache) GetVerifyResult(ctx context.Context, subjectRefString string) (et.VerifyResult, bool) {
+	item, ok := c.syncMap.GetEntry(subjectRefString)
 	if !ok {
 		return et.VerifyResult{}, false
 	}
 	return item.(et.VerifyResult), true
 }
 
-func (memoryCache MemoryCache) SetVerifyResult(ctx context.Context, subjectRefString string, verifyResult et.VerifyResult, ttl time.Duration) {
-	memoryCache.syncMap.SetEntry(subjectRefString, verifyResult, ttl)
+func (c Cache) SetVerifyResult(ctx context.Context, subjectRefString string, verifyResult et.VerifyResult, ttl time.Duration) {
+	c.syncMap.SetEntry(subjectRefString, verifyResult, ttl)
 }

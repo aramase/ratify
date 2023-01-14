@@ -130,13 +130,13 @@ func (executor Executor) verifySubjectInternal(ctx context.Context, verifyParame
 	return types.VerifyResult{IsSuccess: overallVerifySuccess, VerifierReports: verifierReports}, nil
 }
 
-func (ex Executor) verifyReference(ctx context.Context, subjectRef common.Reference, subjectDesc *ocispecs.SubjectDescriptor, referenceDesc ocispecs.ReferenceDescriptor, referrerStore referrerstore.ReferrerStore) types.VerifyResult {
+func (executor Executor) verifyReference(ctx context.Context, subjectRef common.Reference, subjectDesc *ocispecs.SubjectDescriptor, referenceDesc ocispecs.ReferenceDescriptor, referrerStore referrerstore.ReferrerStore) types.VerifyResult {
 	var verifyResults []interface{}
 	var isSuccess = true
 
-	for _, verifier := range ex.Verifiers {
+	for _, verifier := range executor.Verifiers {
 		if verifier.CanVerify(ctx, referenceDesc) {
-			verifyResult, err := verifier.Verify(ctx, subjectRef, referenceDesc, referrerStore, ex)
+			verifyResult, err := verifier.Verify(ctx, subjectRef, referenceDesc, referrerStore, executor)
 			verifyResult.Subject = subjectRef.String()
 			if err != nil {
 				verifyResult = vr.VerifierResult{

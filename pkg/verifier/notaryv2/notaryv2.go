@@ -34,8 +34,6 @@ import (
 	"github.com/deislabs/ratify/pkg/verifier/config"
 	"github.com/deislabs/ratify/pkg/verifier/factory"
 
-	_ "github.com/notaryproject/notation-core-go/signature/cose"
-	_ "github.com/notaryproject/notation-core-go/signature/jws"
 	"github.com/notaryproject/notation-go"
 	notaryVerifier "github.com/notaryproject/notation-go/verifier"
 	"github.com/notaryproject/notation-go/verifier/trustpolicy"
@@ -48,8 +46,8 @@ const (
 	defaultCertPath = "ratify-certs/notary/truststore"
 )
 
-// NotaryV2VerifierConfig describes the configuration of notation verifier
-type NotaryV2VerifierConfig struct {
+// VerifierConfig describes the configuration of notation verifier
+type VerifierConfig struct {
 	Name          string `json:"name"`
 	ArtifactTypes string `json:"artifactTypes"`
 
@@ -166,7 +164,7 @@ func (v *notaryV2Verifier) Verify(ctx context.Context,
 	}, nil
 }
 
-func getVerifierService(conf *NotaryV2VerifierConfig) (notation.Verifier, error) {
+func getVerifierService(conf *VerifierConfig) (notation.Verifier, error) {
 	store := &trustStore{
 		certPaths: conf.VerificationCerts,
 	}
@@ -183,8 +181,8 @@ func (v *notaryV2Verifier) verifySignature(ctx context.Context, subjectRef, medi
 	return (*v.notationVerifier).Verify(ctx, subjectDesc, refBlob, opts)
 }
 
-func parseVerifierConfig(verifierConfig config.VerifierConfig) (*NotaryV2VerifierConfig, error) {
-	conf := &NotaryV2VerifierConfig{}
+func parseVerifierConfig(verifierConfig config.VerifierConfig) (*VerifierConfig, error) {
+	conf := &VerifierConfig{}
 
 	verifierConfigBytes, err := json.Marshal(verifierConfig)
 	if err != nil {
@@ -192,7 +190,7 @@ func parseVerifierConfig(verifierConfig config.VerifierConfig) (*NotaryV2Verifie
 	}
 
 	if err := json.Unmarshal(verifierConfigBytes, &conf); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal to notaryV2VerifierConfig from： %+v, err: %v", verifierConfig, err)
+		return nil, fmt.Errorf("failed to unmarshal to notaryV2 VerifierConfig from： %+v, err: %v", verifierConfig, err)
 	}
 
 	defaultCertsDir := paths.Join(homedir.Get(), ratifyconfig.ConfigFileDir, defaultCertPath)

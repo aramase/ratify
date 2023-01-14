@@ -46,7 +46,7 @@ type PluginConfig struct {
 }
 
 type StoreConfig struct {
-	UseHttp      bool   `json:"useHttp,omitempty"`
+	UseHTTP      bool   `json:"useHttp,omitempty"`
 	AuthProvider string `json:"auth-provider,omitempty"`
 }
 
@@ -99,7 +99,7 @@ func VerifyReference(args *skel.CmdArgs, subjectReference common.Reference, refe
 
 func signatures(ctx context.Context, img string, keyRef string, config *PluginInputConfig) (checkedSignatures []oci.Signature, bundleVerified bool, err error) {
 	var options []name.Option
-	if config.StoreConfig.UseHttp {
+	if config.StoreConfig.UseHTTP {
 		options = append(options, name.Insecure)
 	}
 

@@ -109,9 +109,8 @@ func ReplaceHomeShortcut(path string) string {
 		home := homedir.Get()
 		if len(home) > 0 {
 			return strings.Replace(path, homedir.GetShortcutString(), home, 1) // replace 1 instance
-		} else {
-			logrus.Warningf("Path '%v' replacement failed , value of Home dir '%v'", path, home)
 		}
+		logrus.Warningf("Path '%v' replacement failed , value of Home dir '%v'", path, home)
 	}
 	return path
 }

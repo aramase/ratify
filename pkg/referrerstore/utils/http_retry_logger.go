@@ -21,22 +21,22 @@ import (
 )
 
 // NOTE: This Logger is an adapter for logrus used by Retryable HTTP client in ORAS
-type HttpRetryLogger struct {
+type HTTPRetryLogger struct {
 	retryablehttp.LeveledLogger
 }
 
-func (l HttpRetryLogger) Error(msg string, keysAndValues ...interface{}) {
+func (l HTTPRetryLogger) Error(msg string, keysAndValues ...interface{}) {
 	logrus.Errorln(append([]interface{}{msg}, keysAndValues...)...)
 }
 
-func (l HttpRetryLogger) Info(msg string, keysAndValues ...interface{}) {
+func (l HTTPRetryLogger) Info(msg string, keysAndValues ...interface{}) {
 	logrus.Infoln(append([]interface{}{msg}, keysAndValues...)...)
 }
 
-func (l HttpRetryLogger) Debug(msg string, keysAndValues ...interface{}) {
+func (l HTTPRetryLogger) Debug(msg string, keysAndValues ...interface{}) {
 	logrus.Debugln(append([]interface{}{msg}, keysAndValues...)...)
 }
 
-func (l HttpRetryLogger) Warn(msg string, keysAndValues ...interface{}) {
+func (l HTTPRetryLogger) Warn(msg string, keysAndValues ...interface{}) {
 	logrus.Warnln(append([]interface{}{msg}, keysAndValues...)...)
 }

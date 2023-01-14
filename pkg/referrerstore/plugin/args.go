@@ -30,7 +30,7 @@ type ReferrerStorePluginArgs struct {
 	PluginArgs       [][2]string
 }
 
-var _ pluginCommon.PluginArgs = &ReferrerStorePluginArgs{}
+var _ pluginCommon.Args = &ReferrerStorePluginArgs{}
 
 func (args *ReferrerStorePluginArgs) AsEnviron() []string {
 	env := os.Environ()

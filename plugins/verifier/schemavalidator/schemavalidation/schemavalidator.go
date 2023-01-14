@@ -27,18 +27,17 @@ func Validate(schema string, content []byte) error {
 	dl := gojsonschema.NewBytesLoader(content)
 
 	result, err := gojsonschema.Validate(sl, dl)
-
 	if err != nil {
 		return err
 	}
 
 	if result.Valid() {
 		return nil
-	} else {
-		var e string = ""
-		for _, desc := range result.Errors() {
-			e += fmt.Sprintf("%s:", desc.Description())
-		}
-		return errors.New(e)
 	}
+
+	var e string
+	for _, desc := range result.Errors() {
+		e += fmt.Sprintf("%s:", desc.Description())
+	}
+	return errors.New(e)
 }

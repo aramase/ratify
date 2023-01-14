@@ -57,12 +57,10 @@ func CreateStoreFromConfig(storeConfig config.StorePluginConfig, configVersion s
 		return nil, fmt.Errorf("invalid plugin name for a store: %s", storeName)
 	}
 
-	storeFactory, ok := builtInStores[storeNameStr]
-	if ok {
+	if storeFactory, ok := builtInStores[storeNameStr]; ok {
 		return storeFactory.Create(configVersion, storeConfig)
-	} else {
-		return plugin.NewStore(configVersion, storeConfig, pluginBinDir)
 	}
+	return plugin.NewStore(configVersion, storeConfig, pluginBinDir)
 }
 
 // CreateStoresFromConfig creates a stores from the provided configuration

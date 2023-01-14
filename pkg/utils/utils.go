@@ -18,8 +18,6 @@ package utils
 import (
 	"fmt"
 
-	_ "crypto/sha256"
-
 	"github.com/deislabs/ratify/pkg/common"
 	"github.com/docker/distribution/reference"
 	"github.com/opencontainers/go-digest"

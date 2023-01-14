@@ -204,7 +204,7 @@ func TestParseVerifierConfig(t *testing.T) {
 		name      string
 		configMap map[string]interface{}
 		expectErr bool
-		expect    *NotaryV2VerifierConfig
+		expect    *VerifierConfig
 	}{
 		{
 			name: "failed unmarshalling to notary config",
@@ -220,7 +220,7 @@ func TestParseVerifierConfig(t *testing.T) {
 				"name": test,
 			},
 			expectErr: false,
-			expect: &NotaryV2VerifierConfig{
+			expect: &VerifierConfig{
 				Name:              test,
 				VerificationCerts: []string{defaultCertDir},
 			},
@@ -232,7 +232,7 @@ func TestParseVerifierConfig(t *testing.T) {
 				"verificationCerts": []string{testPath},
 			},
 			expectErr: false,
-			expect: &NotaryV2VerifierConfig{
+			expect: &VerifierConfig{
 				Name:              test,
 				VerificationCerts: []string{testPath, defaultCertDir},
 			},

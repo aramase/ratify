@@ -37,6 +37,10 @@ import (
 	"github.com/opencontainers/go-digest"
 )
 
+const (
+	testArtifactType1 = "test-type1"
+)
+
 func TestServer_Timeout_Failed(t *testing.T) {
 	timeoutDuration := 6
 	testImageName := "localhost:5000/net-monitor:v1"
@@ -52,11 +56,11 @@ func TestServer_Timeout_Failed(t *testing.T) {
 		testDigest := digest.FromString("test")
 		configPolicy := config.PolicyEnforcer{
 			ArtifactTypePolicies: map[string]types.ArtifactTypeVerifyPolicy{
-				"test-type1": types.AnyVerifySuccess,
+				testArtifactType1: types.AnyVerifySuccess,
 			}}
 		store := &mocks.TestStore{References: []ocispecs.ReferenceDescriptor{
 			{
-				ArtifactType: "test-type1",
+				ArtifactType: testArtifactType1,
 			}},
 			ResolveMap: map[string]digest.Digest{
 				"v1": testDigest,
@@ -64,7 +68,7 @@ func TestServer_Timeout_Failed(t *testing.T) {
 		}
 		ver := &core.TestVerifier{
 			CanVerifyFunc: func(at string) bool {
-				return at == "test-type1"
+				return at == testArtifactType1
 			},
 			VerifyResult: func(artifactType string) bool {
 				time.Sleep(time.Duration(timeoutDuration) * time.Second)
@@ -85,6 +89,9 @@ func TestServer_Timeout_Failed(t *testing.T) {
 		server := &Server{
 			GetExecutor: getExecutor,
 			Context:     request.Context(),
+
+			keyMutex: keyMutex{},
+			cache:    newSimpleCache(cacheTTL, cacheMaxSize),
 		}
 
 		handler := contextHandler{
@@ -116,11 +123,11 @@ func TestServer_MultipleSubjects_Success(t *testing.T) {
 		testDigest := digest.FromString("test")
 		configPolicy := config.PolicyEnforcer{
 			ArtifactTypePolicies: map[string]types.ArtifactTypeVerifyPolicy{
-				"test-type1": types.AnyVerifySuccess,
+				testArtifactType1: types.AnyVerifySuccess,
 			}}
 		store := &mocks.TestStore{References: []ocispecs.ReferenceDescriptor{
 			{
-				ArtifactType: "test-type1",
+				ArtifactType: testArtifactType1,
 			}},
 			ResolveMap: map[string]digest.Digest{
 				"v1": testDigest,
@@ -130,7 +137,7 @@ func TestServer_MultipleSubjects_Success(t *testing.T) {
 		}
 		ver := &core.TestVerifier{
 			CanVerifyFunc: func(at string) bool {
-				return at == "test-type1"
+				return at == testArtifactType1
 			},
 			VerifyResult: func(artifactType string) bool {
 				return true
@@ -153,6 +160,156 @@ func TestServer_MultipleSubjects_Success(t *testing.T) {
 		server := &Server{
 			GetExecutor: getExecutor,
 			Context:     request.Context(),
+
+			keyMutex: keyMutex{},
+			cache:    newSimpleCache(cacheTTL, cacheMaxSize),
+		}
+
+		handler := contextHandler{
+			context: server.Context,
+			handler: processTimeout(server.verify, server.GetExecutor().GetVerifyRequestTimeout()),
+		}
+
+		handler.ServeHTTP(responseRecorder, request)
+		var respBody externaldata.ProviderResponse
+		if err := json.NewDecoder(responseRecorder.Result().Body).Decode(&respBody); err != nil {
+			t.Fatalf("failed to decode response body: %v", err)
+		}
+		retFirstKey := respBody.Response.Items[0].Key
+		if retFirstKey != testImageNames[1] {
+			t.Fatalf("Expected first subject response to be %s but got %s", testImageNames[1], retFirstKey)
+		}
+	})
+}
+
+func TestServer_MultipleRequestsForSameSubject_Success(t *testing.T) {
+	testImageNames := []string{"localhost:5000/net-monitor:v1", "localhost:5000/net-monitor:v1"}
+	t.Run("server_multiple_subjects_success", func(t *testing.T) {
+		body := new(bytes.Buffer)
+
+		if err := json.NewEncoder(body).Encode(externaldata.NewProviderRequest(testImageNames)); err != nil {
+			t.Fatalf("failed to encode request body: %v", err)
+		}
+		request := httptest.NewRequest(http.MethodPost, "/ratify/gatekeeper/v1/verify", bytes.NewReader(body.Bytes()))
+		logrus.Infof("policies successfully created. %s", body.Bytes())
+
+		responseRecorder := httptest.NewRecorder()
+
+		testDigest := digest.FromString("test")
+		configPolicy := config.PolicyEnforcer{
+			ArtifactTypePolicies: map[string]types.ArtifactTypeVerifyPolicy{
+				testArtifactType1: types.AnyVerifySuccess,
+			}}
+		store := &mocks.TestStore{References: []ocispecs.ReferenceDescriptor{
+			{
+				ArtifactType: testArtifactType1,
+			}},
+			ResolveMap: map[string]digest.Digest{
+				"v1": testDigest,
+				"v2": testDigest,
+			},
+			ExtraSubject: testImageNames[0],
+		}
+		ver := &core.TestVerifier{
+			CanVerifyFunc: func(at string) bool {
+				return at == testArtifactType1
+			},
+			VerifyResult: func(artifactType string) bool {
+				return true
+			},
+		}
+
+		ex := &core.Executor{
+			PolicyEnforcer: configPolicy,
+			ReferrerStores: []referrerstore.ReferrerStore{store},
+			Verifiers:      []verifier.ReferenceVerifier{ver},
+			Config: &exconfig.ExecutorConfig{
+				RequestTimeout: nil,
+			},
+		}
+
+		getExecutor := func() *core.Executor {
+			return ex
+		}
+
+		server := &Server{
+			GetExecutor: getExecutor,
+			Context:     request.Context(),
+
+			keyMutex: keyMutex{},
+			cache:    newSimpleCache(cacheTTL, cacheMaxSize),
+		}
+
+		handler := contextHandler{
+			context: server.Context,
+			handler: processTimeout(server.verify, server.GetExecutor().GetVerifyRequestTimeout()),
+		}
+
+		handler.ServeHTTP(responseRecorder, request)
+		var respBody externaldata.ProviderResponse
+		if err := json.NewDecoder(responseRecorder.Result().Body).Decode(&respBody); err != nil {
+			t.Fatalf("failed to decode response body: %v", err)
+		}
+		retFirstKey := respBody.Response.Items[0].Key
+		if retFirstKey != testImageNames[1] {
+			t.Fatalf("Expected first subject response to be %s but got %s", testImageNames[1], retFirstKey)
+		}
+	})
+
+	t.Run("server_multiple_subjects_success", func(t *testing.T) {
+		body := new(bytes.Buffer)
+
+		if err := json.NewEncoder(body).Encode(externaldata.NewProviderRequest(testImageNames)); err != nil {
+			t.Fatalf("failed to encode request body: %v", err)
+		}
+		request := httptest.NewRequest(http.MethodPost, "/ratify/gatekeeper/v1/verify", bytes.NewReader(body.Bytes()))
+		logrus.Infof("policies successfully created. %s", body.Bytes())
+
+		responseRecorder := httptest.NewRecorder()
+
+		testDigest := digest.FromString("test")
+		configPolicy := config.PolicyEnforcer{
+			ArtifactTypePolicies: map[string]types.ArtifactTypeVerifyPolicy{
+				testArtifactType1: types.AnyVerifySuccess,
+			}}
+		store := &mocks.TestStore{References: []ocispecs.ReferenceDescriptor{
+			{
+				ArtifactType: testArtifactType1,
+			}},
+			ResolveMap: map[string]digest.Digest{
+				"v1": testDigest,
+				"v2": testDigest,
+			},
+			ExtraSubject: testImageNames[0],
+		}
+		ver := &core.TestVerifier{
+			CanVerifyFunc: func(at string) bool {
+				return at == testArtifactType1
+			},
+			VerifyResult: func(artifactType string) bool {
+				return true
+			},
+		}
+
+		ex := &core.Executor{
+			PolicyEnforcer: configPolicy,
+			ReferrerStores: []referrerstore.ReferrerStore{store},
+			Verifiers:      []verifier.ReferenceVerifier{ver},
+			Config: &exconfig.ExecutorConfig{
+				RequestTimeout: nil,
+			},
+		}
+
+		getExecutor := func() *core.Executor {
+			return ex
+		}
+
+		server := &Server{
+			GetExecutor: getExecutor,
+			Context:     request.Context(),
+
+			keyMutex: keyMutex{},
+			cache:    newSimpleCache(cacheTTL, cacheMaxSize),
 		}
 
 		handler := contextHandler{

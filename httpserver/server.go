@@ -24,9 +24,11 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/deislabs/ratify/config"
+
 	"github.com/gorilla/mux"
 	"github.com/sirupsen/logrus"
 )
@@ -36,18 +38,39 @@ const (
 	certName          = "tls.crt"
 	keyName           = "tls.key"
 	readHeaderTimeout = 5 * time.Second
+
+	// cacheTTL is the default time-to-live for the cache entry.
+	cacheTTL     = 5 * time.Minute
+	cacheMaxSize = 100
 )
 
-type (
-	Server struct {
-		Address       string
-		Router        *mux.Router
-		GetExecutor   config.GetExecutor
-		Context       context.Context
-		CertDirectory string
-		CaCertFile    string
+type Server struct {
+	Address       string
+	Router        *mux.Router
+	GetExecutor   config.GetExecutor
+	Context       context.Context
+	CertDirectory string
+	CaCertFile    string
+
+	keyMutex keyMutex
+	// cache is a thread-safe expiring lru cache which caches external data item indexed
+	// by the subject
+	cache *simpleCache
+}
+
+// keyMutex is a thread-safe map of mutexes, indexed by key.
+type keyMutex struct {
+	locks sync.Map
+}
+
+// Lock locks the mutex for the given key, and returns a function to unlock it.
+func (m *keyMutex) Lock(key string) func() {
+	v, _ := m.locks.LoadOrStore(key, &sync.Mutex{})
+	v.(*sync.Mutex).Lock()
+	return func() {
+		v.(*sync.Mutex).Unlock()
 	}
-)
+}
 
 func NewServer(context context.Context, address string, getExecutor config.GetExecutor, certDir string, caCertFile string) (*Server, error) {
 	if address == "" {
@@ -61,6 +84,8 @@ func NewServer(context context.Context, address string, getExecutor config.GetEx
 		Context:       context,
 		CertDirectory: certDir,
 		CaCertFile:    caCertFile,
+		keyMutex:      keyMutex{},
+		cache:         newSimpleCache(cacheTTL, cacheMaxSize),
 	}
 	server.registerHandlers()
 
@@ -84,38 +109,38 @@ func (server *Server) Run() error {
 		ReadHeaderTimeout: readHeaderTimeout,
 	}
 
-	if server.CertDirectory != "" {
-		certFile := filepath.Join(server.CertDirectory, certName)
-		keyFile := filepath.Join(server.CertDirectory, keyName)
-
-		logrus.Info(fmt.Sprintf("%s: [%s:%s] [%s:%s]", "starting server using TLS", "certFile", certFile, "keyFile", keyFile))
-
-		if server.CaCertFile != "" {
-			caCert, err := os.ReadFile(server.CaCertFile)
-			if err != nil {
-				panic(err)
-			}
-
-			clientCAs := x509.NewCertPool()
-			clientCAs.AppendCertsFromPEM(caCert)
-
-			config := &tls.Config{
-				MinVersion: tls.VersionTLS13,
-				ClientCAs:  clientCAs,
-				ClientAuth: tls.RequireAndVerifyClientCert,
-			}
-			svr.TLSConfig = config
-			logrus.Info(fmt.Sprintf("%s: [%s:%s] ", "loaded client CA certificate for mTLS", "CaFIle", server.CaCertFile))
-		}
-		if err := svr.ServeTLS(lsnr, certFile, keyFile); err != nil {
-			logrus.Errorf("failed to start server: %v", err)
-			return err
-		}
-		return nil
-	} else {
+	if server.CertDirectory == "" {
 		logrus.Info("starting server without TLS")
 		return svr.Serve(lsnr)
 	}
+
+	certFile := filepath.Join(server.CertDirectory, certName)
+	keyFile := filepath.Join(server.CertDirectory, keyName)
+
+	logrus.Info(fmt.Sprintf("%s: [%s:%s] [%s:%s]", "starting server using TLS", "certFile", certFile, "keyFile", keyFile))
+
+	if server.CaCertFile != "" {
+		caCert, err := os.ReadFile(server.CaCertFile)
+		if err != nil {
+			panic(err)
+		}
+
+		clientCAs := x509.NewCertPool()
+		clientCAs.AppendCertsFromPEM(caCert)
+
+		config := &tls.Config{
+			MinVersion: tls.VersionTLS13,
+			ClientCAs:  clientCAs,
+			ClientAuth: tls.RequireAndVerifyClientCert,
+		}
+		svr.TLSConfig = config
+		logrus.Info(fmt.Sprintf("%s: [%s:%s] ", "loaded client CA certificate for mTLS", "CaFile", server.CaCertFile))
+	}
+	if err := svr.ServeTLS(lsnr, certFile, keyFile); err != nil {
+		logrus.Errorf("failed to start server: %v", err)
+		return err
+	}
+	return nil
 }
 
 func (server *Server) register(method, path string, handler ContextHandler) {
@@ -126,7 +151,7 @@ func (server *Server) register(method, path string, handler ContextHandler) {
 }
 
 func (server *Server) registerHandlers() {
-	server.register("POST", ServerRootURL+"/verify", processTimeout(server.verify, server.GetExecutor().GetVerifyRequestTimeout()))
+	server.register(http.MethodPost, ServerRootURL+"/verify", processTimeout(server.verify, server.GetExecutor().GetVerifyRequestTimeout()))
 }
 
 type ServerAddrNotFoundError struct{}

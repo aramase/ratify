@@ -24,13 +24,20 @@ import (
 	"sync"
 	"time"
 
-	e "github.com/deislabs/ratify/pkg/executor"
+	"github.com/deislabs/ratify/pkg/executor"
+	"github.com/deislabs/ratify/pkg/executor/types"
 	"github.com/deislabs/ratify/utils"
+
 	"github.com/open-policy-agent/frameworks/constraint/pkg/externaldata"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sync/singleflight"
 )
 
 const apiVersion = "externaldata.gatekeeper.sh/v1alpha1"
+
+var (
+	requestGroup singleflight.Group
+)
 
 func (server *Server) verify(ctx context.Context, w http.ResponseWriter, r *http.Request) error {
 	sanitizedMethod := utils.SanitizeString(r.Method)
@@ -41,11 +48,11 @@ func (server *Server) verify(ctx context.Context, w http.ResponseWriter, r *http
 	if err != nil {
 		return fmt.Errorf("unable to read request body: %w", err)
 	}
+	defer r.Body.Close()
 
 	// parse request body
 	var providerRequest externaldata.ProviderRequest
-	err = json.Unmarshal(body, &providerRequest)
-	if err != nil {
+	if err = json.Unmarshal(body, &providerRequest); err != nil {
 		return fmt.Errorf("unable to unmarshal request body: %w", err)
 	}
 
@@ -58,30 +65,41 @@ func (server *Server) verify(ctx context.Context, w http.ResponseWriter, r *http
 		wg.Add(1)
 		go func(subject string) {
 			defer wg.Done()
-			// TODO: Enable caching:  Providers should add a caching mechanism to avoid extra calls to external data sources.
+			// unlock := server.keyMutex.Lock(subject)
+			// defer unlock()
+
 			logrus.Infof("subject for request %v %v is %v", sanitizedMethod, sanitizedURL, subject)
-			returnItem := externaldata.Item{
-				Key: subject,
-			}
+			v, err, _ := requestGroup.Do(subject, func() (interface{}, error) {
+				logrus.Infof("[singleflight] subject for request %v %v is %v", sanitizedMethod, sanitizedURL, subject)
+				returnItem := externaldata.Item{
+					Key: subject,
+				}
 
-			verifyParameters := e.VerifyParameters{
-				Subject: subject,
-			}
+				verifyParameters := executor.VerifyParameters{
+					Subject: subject,
+				}
 
-			result, err := server.GetExecutor().VerifySubject(ctx, verifyParameters)
+				result, err := server.GetExecutor().VerifySubject(ctx, verifyParameters)
+				if err != nil {
+					returnItem.Error = err.Error()
+				}
+
+				server.cache.set(subject, &result)
+				if res, err := json.MarshalIndent(result, "", "  "); err == nil {
+					fmt.Println(string(res))
+				}
+				return result, nil
+			})
 			if err != nil {
-				returnItem.Error = err.Error()
+				logrus.Errorf("error for request %v %v is %v", sanitizedMethod, sanitizedURL, err)
+				return
 			}
 
-			res, err := json.MarshalIndent(result, "", "  ")
-			if err == nil {
-				fmt.Println(string(res))
-			}
 			mu.Lock()
 			defer mu.Unlock()
 			results = append(results, externaldata.Item{
 				Key:   subject,
-				Value: fromVerifyResult(result),
+				Value: fromVerifyResult(v.(types.VerifyResult)),
 			})
 		}(utils.SanitizeString(subject))
 	}
